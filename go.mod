@@ -2,7 +2,10 @@ module MYSQL-orchestration-API
 
 go 1.23.4
 
-require github.com/gin-gonic/gin v1.10.0
+require (
+	github.com/gin-gonic/gin v1.10.0
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/bytedance/sonic v1.12.6 // indirect
@@ -30,5 +33,4 @@ require (
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.36.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
