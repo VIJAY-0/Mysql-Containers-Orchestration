@@ -17,6 +17,7 @@ type ServerConfig struct {
 
 type Config struct {
 	MasterServer ServerConfig `yaml:"masterserver"`
+	SlaveServer  ServerConfig `yaml:"slaveserver"`
 }
 
 func LoadConfig() (*Config, error) {

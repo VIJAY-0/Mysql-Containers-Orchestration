@@ -2,9 +2,13 @@ masterserver:
   container_name: "API_mysql-master"
   root_password: "root"
   database_name: "mydb"
-  port_mapping: "3306:3305"
+  port_mapping: "3306:3306"
   image: "mysql:latest"
 
-# You can add other configurations here
-other_config:
-  some_field: "some_value"
+
+slaveserver:
+  container_name: "API_mysql-slave"
+  root_password: "root"
+  database_name: "mydb"
+  # port_mapping: "3306:3305"
+  image: "mysql:latest"
