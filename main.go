@@ -10,17 +10,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func cleanup(Slaves map[string]string) gin.HandlerFunc {
+func cleanup(Slaves map[string]string, Master string) gin.HandlerFunc {
+	Slaves[Master] = Master
 	return func(c *gin.Context) {
 		for key := range Slaves {
 			// value := Slaves[key]
-			cmd := exec.Command("docker", "rm", "-f", key)
+			container := fmt.Sprintf("%s-server", key)
+			cmd := exec.Command("docker", "rm", "-f", container)
 			cmd.Env = append(cmd.Env, "DOCKER_HOST=npipe:////./pipe/docker_engine")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
-				return
+				// return
 			}
 
+			volume := fmt.Sprintf("%s-data", key)
+			cmd = exec.Command("docker", "rm", "-f", volume)
+			cmd.Env = append(cmd.Env, "DOCKER_HOST=npipe:////./pipe/docker_engine")
+			output, err = cmd.CombinedOutput()
+
+			if err != nil {
+				// return
+			}
 			fmt.Printf("Cleaned %s", string(output))
 			delete(Slaves, key)
 		}
@@ -30,7 +40,7 @@ func cleanup(Slaves map[string]string) gin.HandlerFunc {
 
 func main() {
 
-	config, err := config.LoadConfig()
+	compose, err := config.LoadConfig()
 
 	if err != nil {
 		log.Fatalf("Error loading config :%v", err)
@@ -38,14 +48,16 @@ func main() {
 
 	r := gin.Default()
 
-	// curl http://localhost:8080/createmaster
-	r.GET("/createmaster", server.StartMaster(&config.MasterServer))
-
-	// curl http://localhost:8080/addslave
+	Master := "master"
 	Slaves := make(map[string]string)
 
-	r.GET("/addslave", server.AddSlave(&config.SlaveServer, Slaves))
+	// // curl http://localhost:8080/createmaster
+	r.GET("/createmaster", server.StartMaster(*compose.Services["master"], Master))
 
-	r.GET("/cleanup", cleanup(Slaves))
+	// curl http://localhost:8080/addslave
+
+	r.GET("/addslave", server.AddSlave(*compose.Services["slave"], Slaves))
+
+	r.GET("/cleanup", cleanup(Slaves, Master))
 	r.Run(":8080")
 }

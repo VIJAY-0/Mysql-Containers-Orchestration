@@ -1,0 +1,86 @@
+// COMMANDS ON MASTER
+
+docker exec -it mysql-master mysql -uroot -prootpassword
+
+
+
+
+-- Drop the existing user
+DROP USER IF EXISTS 'replicator'@'%';
+
+-- Create a new user with the mysql_native_password plugin
+CREATE USER 'replicator'@'%' IDENTIFIED WITH 'mysql_native_password' BY 'replicatorpassword';
+
+-- Grant replication privileges to the user
+GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';
+
+-- Apply changes
+FLUSH PRIVILEGES;
+
+
+
+SHOW BINARY LOGS;
+
+
+SHOW MASTER STATUS;
+
+
+
+
+
+CREATE DATABASE test_db;
+USE test_db;
+
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
+INSERT INTO users (id, name) VALUES (1, 'John Doe'), (2, 'Jane Smith');
+
+
+
+ // changes 
+INSERT INTO users (id, name) VALUES (3, 'Alice Johnson');
+
+
+UPDATE users SET name = 'Johnathan Doe 222' WHERE id = 1;
+
+
+// CHECK
+
+USE test_db;
+SELECT * FROM users;
+
+
+
+
+
+
+
+
+// COMMANDS ON SLAVE
+
+
+docker exec -it mysql-slave mysql -uroot -prootpassword
+
+
+
+SHOW VARIABLES LIKE 'server_id';
+SET GLOBAL server_id = 2;
+
+
+
+
+
+
+STOP SLAVE;
+
+CHANGE MASTER TO 
+    MASTER_HOST='mysql-master',
+    MASTER_USER='replicator',
+    MASTER_PASSWORD='replicatorpassword',
+    MASTER_LOG_FILE='binlog.000003',
+    MASTER_LOG_POS=839;
+
+
+START SLAVE;
+
+SHOW SLAVE STATUS\G;
+
