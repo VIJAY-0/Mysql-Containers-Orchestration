@@ -10,46 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func getARGS(serverconfig config.ServerConfig) []string {
-	args := []string{"run", "-d"}
-	if serverconfig.ContainerName != "" {
-		args = append(args, "--name", serverconfig.ContainerName)
-	}
-
-	if serverconfig.Restart == "always" {
-		args = append(args, "--restart", "always")
-	}
-
-	if serverconfig.Environment.MYSQL_ROOT_PASSWORD != "" {
-		args = append(args, "-e", fmt.Sprintf("MYSQL_ROOT_PASSWORD=%v", serverconfig.Environment.MYSQL_ROOT_PASSWORD))
-	} else {
-		args = append(args, "-e", "MYSQL_ROOT_PASSWORD=root")
-	}
-
-	if serverconfig.Environment.MYSQL_DATABASE != "" {
-		args = append(args, "-e", fmt.Sprintf("MYSQL_DATABASE=%s", serverconfig.Environment.MYSQL_DATABASE))
-	} else {
-		args = append(args, "-e", "MYSQL_DATABASE=mydb")
-	}
-
-	args = append(args, "-v", serverconfig.Volumes[0])
-	args = append(args, "-v", serverconfig.Volumes[1])
-
-	for _, portMapping := range serverconfig.Ports {
-		args = append(args, "-p", portMapping)
-	}
-
-	for _, network := range serverconfig.Networks {
-		args = append(args, "--network", network)
-	}
-
-	args = append(args, serverconfig.Image)
-
-	args = append(args, serverconfig.Entrypoint)
-
-	return args
-}
-
 func addServer(fileName string) ([]byte, error) {
 
 	cmd := exec.Command("docker-compose", "-f", fileName, "up", "-d")
@@ -59,13 +19,17 @@ func addServer(fileName string) ([]byte, error) {
 	return output, err
 }
 
-func StartMaster(masterconfig config.ServerConfig, Master string) gin.HandlerFunc {
+func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
-		fileName, err := config.MasterCompose(masterconfig, Master, "mysql-network")
-		output, err := addServer(fileName)
+		// fmt.Printf("StartMaster ->%s\n", MasterID)
 
+		masterconfig := config.CreateServerConfig(masterconfigtemplate, MasterID)
+		Master[MasterID] = masterconfig
+
+		fileName, err := config.MasterCompose(masterconfig, MasterID, "mysql-network")
+		output, err := addServer(fileName)
 		if err != nil {
 
 			outputstr := string(output)
@@ -92,15 +56,18 @@ func StartMaster(masterconfig config.ServerConfig, Master string) gin.HandlerFun
 	}
 }
 
-func AddSlave(slaveconfig config.ServerConfig, Slaves map[string]string) gin.HandlerFunc {
+func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
 		SlaveCntr := len(Slaves)
-		SlaveID := fmt.Sprintf("%s%v", slaveconfig.ContainerName, SlaveCntr)
+		SlaveID := fmt.Sprintf("%s%v", slaveConfigTemplate.ContainerName, SlaveCntr)
 
 		// fileName, err := config.SlaveCompose(slaveconfig, SlaveID, "mysql-network")
+		slaveconfig := config.CreateServerConfig(slaveConfigTemplate, SlaveID)
+
 		fileName, err := config.MasterCompose(slaveconfig, SlaveID, "mysql-network")
+
 		output, err := addServer(fileName)
 
 		if err != nil {
@@ -116,6 +83,10 @@ func AddSlave(slaveconfig config.ServerConfig, Slaves map[string]string) gin.Han
 			"message":   "Sucessfully Added Slave container",
 			"container": string(output),
 		})
-		Slaves[SlaveID] = SlaveID
+
+		Slaves[SlaveID] = slaveconfig
+		fmt.Println(*slaveconfig)
+
+		// MysqlServer.initSlave(slaveconfig)
 	}
 }
