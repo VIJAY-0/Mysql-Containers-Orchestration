@@ -132,7 +132,7 @@ func getMasterStatus(Master map[string]*config.ServerConfig, MasterID string) (s
 	}
 	return "", "", err
 }
-func InitSlave(Master map[string]*config.ServerConfig, MasterID string, slaveconfig *config.ServerConfig, SlaveCntr int) {
+func InitSlave(Master map[string]*config.ServerConfig, MasterID string, slaveconfig *config.ServerConfig, SlaveCntr int, SlaveDSNs *[]string) {
 
 	fmt.Println("Initiation Started...")
 	slave := slaveconfig
@@ -142,6 +142,8 @@ func InitSlave(Master map[string]*config.ServerConfig, MasterID string, slavecon
 	port := slave.Ports[0][0:4]
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", username, password, host, port)
+	dsn_ := fmt.Sprintf("%s:%s", host, port)
+	(*SlaveDSNs) = append((*SlaveDSNs), dsn_)
 	db, err := waitForMySQL(dsn, 10, 5*time.Second)
 	if err != nil {
 		log.Fatalf("Error opening database: %v", err)

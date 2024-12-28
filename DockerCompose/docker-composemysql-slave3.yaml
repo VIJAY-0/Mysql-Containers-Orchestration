@@ -1,0 +1,23 @@
+services:
+    mysql-slave3:
+        image: mysql:8.0
+        container_name: mysql-slave3-server
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: rootpassword
+            MYSQL_USER: user
+            MYSQL_PASSWORD: password
+        ports:
+            - 3309:3306
+        volumes:
+            - .\config\slave\my.cnf:/etc/mysql/my.cnf
+            - mysql-slave3-data:/var/lib/mysql
+        networks:
+            - mysql-network
+        entrypoint: bash -c "chmod 644 /etc/mysql/my.cnf && exec docker-entrypoint.sh mysqld"
+volumes:
+    mysql-slave3-data:
+        name: mysql-slave3-data
+networks:
+    mysql-network:
+        name: mysql-network

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"MYSQL-orchestration-API/LoadBalancer"
 	"MYSQL-orchestration-API/config"
 	"MYSQL-orchestration-API/server"
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -79,8 +81,10 @@ func main() {
 
 	// curl http://localhost:8080/addslave
 
-	r.GET("/addslave", server.AddSlave(compose.Services["slave"], Slaves, Master, MasterID))
-	r.GET("/listslaves", server.ListSlave(Slaves))
+	var SlaveDSNs []string
+
+	r.GET("/addslave", server.AddSlave(compose.Services["slave"], Slaves, Master, MasterID, &SlaveDSNs))
+	r.GET("/listslaves", server.ListSlave(&SlaveDSNs))
 
 	r.GET("/cleanup", cleanup(Slaves, Master))
 
@@ -95,6 +99,33 @@ func main() {
 			log.Fatalf("ListenAndServe error: %s\n", err)
 		}
 	}()
+
+	//LOAD BALANCER
+	PORT := "3305"
+
+	lb, err := LoadBalancer.NewLoadBalancer(SlaveDSNs)
+	lb.SlaveDSNs = &SlaveDSNs
+
+	if err != nil {
+		log.Fatalf("Failed to initialize load balancer: %v", err)
+	}
+
+	listener, err := net.Listen("tcp", ":"+PORT)
+	if err != nil {
+		log.Fatalf("Failed to start Proxy server: %v", err)
+	}
+	defer listener.Close()
+
+	log.Print("LoadBalancer Proxy listening on Port:,%s", PORT)
+
+	for {
+		clientConn, err := listener.Accept()
+		if err != nil {
+			log.Printf("Failed to accept connection: %v", err)
+			continue
+		}
+		go lb.HandleConnection(clientConn)
+	}
 
 	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)

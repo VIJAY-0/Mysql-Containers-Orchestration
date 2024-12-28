@@ -76,7 +76,7 @@ func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*c
 	}
 }
 
-func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
+func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string, SlaveDSNs *[]string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
@@ -107,17 +107,15 @@ func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*confi
 		Slaves[SlaveID] = slaveconfig
 		fmt.Println(*slaveconfig)
 
-		MysqlServer.InitSlave(Master, MasterID, slaveconfig, SlaveCntr)
+		MysqlServer.InitSlave(Master, MasterID, slaveconfig, SlaveCntr, SlaveDSNs)
 
 	}
 }
 
-func ListSlave(Slaves map[string]*config.ServerConfig) gin.HandlerFunc {
+func ListSlave(SlaveDSNs *[]string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		for key, val := range Slaves {
-			fmt.Println(key)
-			fmt.Println(val)
-			fmt.Println("------------------------------")
+		for _, d := range *SlaveDSNs {
+			fmt.Println(d)
 		}
 	}
 }
