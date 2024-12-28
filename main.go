@@ -17,13 +17,19 @@ import (
 
 func cleanup(Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig) gin.HandlerFunc {
 
-	for key, serverconfig := range Master {
-		Slaves[key] = serverconfig
-		delete(Master, key)
-	}
-
 	return func(c *gin.Context) {
+		Cleaner := make(map[string]*config.ServerConfig)
+
 		for key, serverconfig := range Slaves {
+			Cleaner[key] = serverconfig
+			delete(Slaves, key)
+		}
+		for key, serverconfig := range Master {
+			Cleaner[key] = serverconfig
+			delete(Master, key)
+		}
+
+		for key, serverconfig := range Cleaner {
 			// value := Slaves[key]
 			container := fmt.Sprintf("%s-server", key)
 			cmd := exec.Command("docker", "rm", "-f", container)
@@ -33,6 +39,7 @@ func cleanup(Slaves map[string]*config.ServerConfig, Master map[string]*config.S
 			if err != nil {
 				// return
 			}
+
 			volume := fmt.Sprintf("%s-data", key)
 			cmd = exec.Command("docker", "volume", "rm", volume)
 			cmd.Env = append(cmd.Env, "DOCKER_HOST=npipe:////./pipe/docker_engine")
@@ -42,8 +49,6 @@ func cleanup(Slaves map[string]*config.ServerConfig, Master map[string]*config.S
 				// return
 			}
 			fmt.Printf("Cleaned %s", string(output))
-			delete(Slaves, key)
-
 			fmt.Printf("Cleaned %s", serverconfig)
 			// free(serverconfig)
 		}
@@ -69,10 +74,13 @@ func main() {
 
 	// // curl http://localhost:8080/createmaster
 	r.GET("/createmaster", server.StartMaster(compose.Services["master"], Master, MasterID))
+	r.GET("/initmaster", server.InitMaster(Master, MasterID))
+	r.GET("/master", server.PrintMaster(Master, MasterID))
 
 	// curl http://localhost:8080/addslave
 
-	r.GET("/addslave", server.AddSlave(compose.Services["slave"], Slaves))
+	r.GET("/addslave", server.AddSlave(compose.Services["slave"], Slaves, Master, MasterID))
+	r.GET("/listslaves", server.ListSlave(Slaves))
 
 	r.GET("/cleanup", cleanup(Slaves, Master))
 
@@ -96,7 +104,6 @@ func main() {
 	log.Println("Running CleanUp...")
 	cleanup(Slaves, Master)
 	log.Println("Shutting down server...")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {

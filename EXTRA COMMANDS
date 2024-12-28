@@ -34,8 +34,6 @@ USE test_db;
 CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
 INSERT INTO users (id, name) VALUES (1, 'John Doe'), (2, 'Jane Smith');
 
-
-
  // changes 
 INSERT INTO users (id, name) VALUES (3, 'Alice Johnson');
 
@@ -64,10 +62,6 @@ docker exec -it mysql-slave mysql -uroot -prootpassword
 
 SHOW VARIABLES LIKE 'server_id';
 SET GLOBAL server_id = 2;
-
-
-
-
 
 
 STOP SLAVE;

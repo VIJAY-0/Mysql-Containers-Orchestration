@@ -1,6 +1,7 @@
 package server
 
 import (
+	"MYSQL-orchestration-API/MysqlServer"
 	"MYSQL-orchestration-API/config"
 	"fmt"
 	"net/http"
@@ -17,6 +18,21 @@ func addServer(fileName string) ([]byte, error) {
 	output, err := cmd.CombinedOutput()
 
 	return output, err
+}
+
+func PrintMaster(Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fmt.Println(Master[MasterID])
+	}
+}
+
+func InitMaster(Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		MysqlServer.InitMaster(Master, MasterID)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Sucessfully Initiated container",
+		})
+	}
 }
 
 func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
@@ -53,21 +69,25 @@ func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*c
 			"message":   "Sucessfully created container",
 			"container": string(output),
 		})
+
+		Master[MasterID] = masterconfig
+		fmt.Println(masterconfig)
+		// MysqlServer.InitMaster(masterconfig)
 	}
 }
 
-func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig) gin.HandlerFunc {
+func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
-		SlaveCntr := len(Slaves)
+		SlaveCntr := len(Slaves) + 2
 		SlaveID := fmt.Sprintf("%s%v", slaveConfigTemplate.ContainerName, SlaveCntr)
-
-		// fileName, err := config.SlaveCompose(slaveconfig, SlaveID, "mysql-network")
 		slaveconfig := config.CreateServerConfig(slaveConfigTemplate, SlaveID)
 
-		fileName, err := config.MasterCompose(slaveconfig, SlaveID, "mysql-network")
+		port := 3306 + SlaveCntr
 
+		slaveconfig.Ports = append(slaveconfig.Ports, fmt.Sprintf("%v:3306", port))
+		fileName, err := config.MasterCompose(slaveconfig, SlaveID, "mysql-network")
 		output, err := addServer(fileName)
 
 		if err != nil {
@@ -87,6 +107,17 @@ func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*confi
 		Slaves[SlaveID] = slaveconfig
 		fmt.Println(*slaveconfig)
 
-		// MysqlServer.initSlave(slaveconfig)
+		MysqlServer.InitSlave(Master, MasterID, slaveconfig, SlaveCntr)
+
+	}
+}
+
+func ListSlave(Slaves map[string]*config.ServerConfig) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		for key, val := range Slaves {
+			fmt.Println(key)
+			fmt.Println(val)
+			fmt.Println("------------------------------")
+		}
 	}
 }
