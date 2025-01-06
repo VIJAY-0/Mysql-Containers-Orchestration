@@ -4,59 +4,17 @@ import (
 	"MYSQL-orchestration-API/LoadBalancer"
 	"MYSQL-orchestration-API/config"
 	"MYSQL-orchestration-API/server"
+	"MYSQL-orchestration-API/utils/health"
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
-
-func cleanup(Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig) gin.HandlerFunc {
-
-	return func(c *gin.Context) {
-		Cleaner := make(map[string]*config.ServerConfig)
-
-		for key, serverconfig := range Slaves {
-			Cleaner[key] = serverconfig
-			delete(Slaves, key)
-		}
-		for key, serverconfig := range Master {
-			Cleaner[key] = serverconfig
-			delete(Master, key)
-		}
-
-		for key, serverconfig := range Cleaner {
-			// value := Slaves[key]
-			container := fmt.Sprintf("%s-server", key)
-			cmd := exec.Command("docker", "rm", "-f", container)
-			cmd.Env = append(cmd.Env, "DOCKER_HOST=npipe:////./pipe/docker_engine")
-			output, err := cmd.CombinedOutput()
-			fmt.Printf("Cleaned %s", string(output))
-			if err != nil {
-				// return
-			}
-
-			volume := fmt.Sprintf("%s-data", key)
-			cmd = exec.Command("docker", "volume", "rm", volume)
-			cmd.Env = append(cmd.Env, "DOCKER_HOST=npipe:////./pipe/docker_engine")
-			output, err = cmd.CombinedOutput()
-
-			if err != nil {
-				// return
-			}
-			fmt.Printf("Cleaned %s", string(output))
-			fmt.Printf("Cleaned %s", serverconfig)
-			// free(serverconfig)
-		}
-
-	}
-}
 
 func main() {
 
@@ -74,8 +32,9 @@ func main() {
 	MasterID := "master"
 	Master[MasterID] = nil
 
+	var MasterDSN string
 	// // curl http://localhost:8080/createmaster
-	r.GET("/createmaster", server.StartMaster(compose.Services["master"], Master, MasterID))
+	r.GET("/createmaster", server.StartMaster(compose.Services["master"], Master, MasterID, &MasterDSN))
 	r.GET("/initmaster", server.InitMaster(Master, MasterID))
 	r.GET("/master", server.PrintMaster(Master, MasterID))
 
@@ -84,9 +43,9 @@ func main() {
 	var SlaveDSNs []string
 
 	r.GET("/addslave", server.AddSlave(compose.Services["slave"], Slaves, Master, MasterID, &SlaveDSNs))
+	r.GET("/removeslave", server.RemoveSlave(compose.Services["slave"], Slaves))
 	r.GET("/listslaves", server.ListSlave(&SlaveDSNs))
-
-	r.GET("/cleanup", cleanup(Slaves, Master))
+	r.GET("/cleanup", server.Cleanup(Slaves, Master))
 
 	server := &http.Server{
 		Addr:    ":8080",
@@ -104,11 +63,12 @@ func main() {
 	PORT := "3305"
 
 	lb, err := LoadBalancer.NewLoadBalancer(SlaveDSNs)
-	lb.SlaveDSNs = &SlaveDSNs
-
 	if err != nil {
 		log.Fatalf("Failed to initialize load balancer: %v", err)
 	}
+
+	lb.SlaveDSNs = &SlaveDSNs
+	lb.MasterDSN = &MasterDSN
 
 	listener, err := net.Listen("tcp", ":"+PORT)
 	if err != nil {
@@ -116,7 +76,9 @@ func main() {
 	}
 	defer listener.Close()
 
-	log.Print("LoadBalancer Proxy listening on Port:,%s", PORT)
+	log.Printf("LoadBalancer Proxy listening on Port:,%s", PORT)
+
+	go health.HealthCheck(Slaves)
 
 	for {
 		clientConn, err := listener.Accept()
@@ -133,7 +95,8 @@ func main() {
 	<-quit                            // Block until signal is received
 
 	log.Println("Running CleanUp...")
-	cleanup(Slaves, Master)
+	// cleanup.Cleanup(Slaves, Master)
+
 	log.Println("Shutting down server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

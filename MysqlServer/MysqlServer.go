@@ -88,6 +88,15 @@ func InitMaster(Master map[string]*config.ServerConfig, MasterID string) {
 	fmt.Println("Initiation Completed #")
 }
 
+func GetDSN(serverconfig *config.ServerConfig) string {
+
+	master := serverconfig
+	host := "localhost"
+	port := master.Ports[0][0:4]
+	dsn := fmt.Sprintf("%s:%s", host, port)
+	return dsn
+}
+
 func getMasterStatus(Master map[string]*config.ServerConfig, MasterID string) (string, string, error) {
 
 	master := Master[MasterID]

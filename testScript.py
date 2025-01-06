@@ -17,7 +17,9 @@ def test_connection():
             port=port
         )
         cursor = conn.cursor()
-        cursor.execute("SHOW VARIABLES LIKE 'server_id' ;")
+        # cursor.execute("SHOW VARIABLES LIKE 'server_id' ;")
+        cursor.execute("SHOW DATABASES ;")
+
         for x in cursor.fetchall():
             print(x)
         conn.close()

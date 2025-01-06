@@ -3,6 +3,7 @@ package server
 import (
 	"MYSQL-orchestration-API/MysqlServer"
 	"MYSQL-orchestration-API/config"
+	"MYSQL-orchestration-API/utils/cleanup"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -11,7 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func addServer(fileName string) ([]byte, error) {
+func Cleanup(Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cleanup.Cleanup(Slaves, Master)
+	}
+}
+
+func AddServer(fileName string) ([]byte, error) {
 
 	cmd := exec.Command("docker-compose", "-f", fileName, "up", "-d")
 	cmd.Env = append(cmd.Env, "DOCKER_HOST=npipe:////./pipe/docker_engine")
@@ -35,7 +42,7 @@ func InitMaster(Master map[string]*config.ServerConfig, MasterID string) gin.Han
 	}
 }
 
-func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string) gin.HandlerFunc {
+func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string, MasterDSN *string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
@@ -43,9 +50,9 @@ func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*c
 
 		masterconfig := config.CreateServerConfig(masterconfigtemplate, MasterID)
 		Master[MasterID] = masterconfig
-
+		*MasterDSN = MysqlServer.GetDSN(masterconfig)
 		fileName, err := config.MasterCompose(masterconfig, MasterID, "mysql-network")
-		output, err := addServer(fileName)
+		output, err := AddServer(fileName)
 		if err != nil {
 
 			outputstr := string(output)
@@ -76,6 +83,24 @@ func StartMaster(masterconfigtemplate *config.ServerConfig, Master map[string]*c
 	}
 }
 
+func RemoveSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if len(Slaves) == 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"response": "No slaves",
+			})
+			return
+		}
+		SlaveCntr := len(Slaves) + 2
+		SlaveID := fmt.Sprintf("%s%v", slaveConfigTemplate.ContainerName, SlaveCntr)
+		LastSlave := Slaves[SlaveID]
+		cleanup.RemoveSlave(LastSlave, SlaveID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"response": fmt.Sprintf("Removed Slave %v", SlaveID),
+		})
+	}
+}
+
 func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*config.ServerConfig, Master map[string]*config.ServerConfig, MasterID string, SlaveDSNs *[]string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
@@ -88,7 +113,7 @@ func AddSlave(slaveConfigTemplate *config.ServerConfig, Slaves map[string]*confi
 
 		slaveconfig.Ports = append(slaveconfig.Ports, fmt.Sprintf("%v:3306", port))
 		fileName, err := config.MasterCompose(slaveconfig, SlaveID, "mysql-network")
-		output, err := addServer(fileName)
+		output, err := AddServer(fileName)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
